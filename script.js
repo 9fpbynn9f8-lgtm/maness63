@@ -1,53 +1,101 @@
-require("dotenv").config();
+// MENU MOBILE
+const menuButton = document.querySelector('.menu-toggle');
+const navLinks = document.querySelector('.nav-links');
 
-const express = require("express");
-const Stripe = require("stripe");
-const path = require("path");
+if (menuButton && navLinks) {
+  menuButton.addEventListener('click', () => {
+    const isOpen = navLinks.classList.toggle('open');
 
-const app = express();
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-app.use(express.static(path.join(__dirname, "public", "public")));s
+    menuButton.setAttribute(
+      'aria-expanded',
+      String(isOpen)
+    );
+  });
 
-app.use(express.json());
-
-const prestations = {
-  consultation: {
-    nom: "Consultation",
-    montant: 4000,
-  },
-};
-
-app.post("/create-checkout-session", async (req, res) => {
-  try {
-    const prestation = prestations[req.body.prestation];
-
-    if (!prestation) {
-      return res.status(400).json({ error: "Prestation inconnue" });
-    }
-
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      line_items: [
-        {
-          price_data: {
-            currency: "eur",
-            product_data: { name: prestation.nom },
-            unit_amount: prestation.montant,
-          },
-          quantity: 1,
-        },
-      ],
-      success_url: "http://localhost:4242/success.html",
-      cancel_url: "http://localhost:4242/cancel.html",
+  navLinks.querySelectorAll('a').forEach(link => {
+    link.addEventListener('click', () => {
+      navLinks.classList.remove('open');
+      menuButton.setAttribute('aria-expanded', 'false');
     });
+  });
+}
 
-    res.json({ url: session.url });
-  } catch (error) {
-    console.error(error.message);
-    res.status(500).json({ error: "Erreur lors de la création du paiement" });
-  }
-});
+// ANNÉE AUTOMATIQUE
+document.getElementById('year').textContent =
+  new Date().getFullYear();
 
-app.listen(4242, () => {
-  console.log("Serveur démarré sur http://localhost:4242");
-});
+// FORMULAIRE WHATSAPP
+const projectForm = document.getElementById('project-form');
+
+if (projectForm) {
+  projectForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+
+    const data = new FormData(projectForm);
+
+    const message = [
+      'Bonjour, je souhaite parler de mon projet carrelage.',
+      `Nom : ${data.get('nom')}`,
+      `Téléphone : ${data.get('telephone') || 'Non renseigné'}`,
+      `E-mail : ${data.get('email') || 'Non renseigné'}`,
+      `Projet : ${data.get('type')}`,
+      `Message : ${data.get('message')}`
+    ].join('\n');
+
+    const url =
+      'https://api.whatsapp.com/send?phone=33660079044&text='
+      + encodeURIComponent(message);
+
+    window.open(url, '_blank', 'noopener');
+  });
+}
+
+// PAIEMENT STRIPE
+// Le serveur doit exposer POST /create-checkout-session.
+
+const payButton = document.getElementById('payer-consultation');
+
+if (payButton) {
+  payButton.addEventListener('click', async () => {
+
+    payButton.disabled = true;
+    payButton.textContent = 'Préparation du paiement…';
+
+    try {
+      const response = await fetch(
+        '/create-checkout-session',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            prestation: 'consultation'
+          })
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok || !result.url) {
+        throw new Error(
+          result.error || 'La session de paiement n’a pas été créée.'
+        );
+      }
+
+      window.location.href = result.url;
+
+    } catch (error) {
+      console.error(error);
+
+      alert(
+        'Le paiement ne peut pas être lancé. Vérifiez la route Stripe dans server.js et réessayez.'
+      );
+
+      payButton.disabled = false;
+      payButton.textContent = 'Payer ma consultation – 40 €';
+    }
+  });
+}
+
+         
